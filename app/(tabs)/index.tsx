@@ -15,6 +15,7 @@ import {
   getDatabase,
   get,
   serverTimestamp,
+  runTransaction,
 } from "firebase/database";
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
@@ -174,22 +175,85 @@ export default function App() {
   );
 
   useEffect(() => {
-    set(ref(database, "currentDate"), serverTimestamp());
+    let unsubscribe: (() => void) | undefined;
 
-    const trashDutyRef = ref(database, "trashDuty");
+    const initializeApp = async () => {
+      try {
+        await set(ref(database, "currentDate"), serverTimestamp());
 
-    const unsubscribe = onValue(trashDutyRef, (snapshot) => {
-      const fetchedData = snapshot.val() as ITrashDutyData | null;
-      initializeData(fetchedData);
-    });
+        const serverTime = await getCurrentServerTime();
+        setToday(serverTime);
 
-    async function getTodayDate() {
-      const today = await getCurrentServerTime();
-      setToday(today);
-    }
+        const trashDutyRef = ref(database, "trashDuty");
 
-    return () => unsubscribe();
-  }, [initializeData]);
+        const snapshot = await get(trashDutyRef);
+        const currentData = snapshot.val() as ITrashDutyData | null;
+
+        let needsUpdate = false;
+        let newData: ITrashDutyData | null = null;
+
+        if (!currentData) {
+          console.log("No data exists, creating initial data");
+          needsUpdate = true;
+          newData = createNewWeekData();
+        } else if (isNewWeek(currentData.weekStartDate, serverTime)) {
+          console.log("New week detected, resetting data");
+          needsUpdate = true;
+          newData = createNewWeekData(
+            currentData.monthlyStats,
+            currentData.rotationOffset,
+          );
+        } else if (isNewMonth(currentData.lastUpdated)) {
+          console.log("New month detected, resetting monthly stats");
+          needsUpdate = true;
+          const resetMonthlyStats = HOUSEMATES.reduce((acc, person) => {
+            acc[person] = { done: 0, missed: 0 };
+            return acc;
+          }, {} as IMonthlyStats);
+          newData = createNewWeekData(
+            resetMonthlyStats,
+            currentData.rotationOffset,
+          );
+        }
+
+        if (needsUpdate && newData) {
+          await runTransaction(trashDutyRef, (txnData) => {
+            if (!txnData) {
+              return newData;
+            }
+            
+            if (isNewWeek(txnData.weekStartDate, serverTime)) {
+              return newData;
+            }
+            
+            return txnData;
+          });
+        }
+
+        unsubscribe = onValue(trashDutyRef, (snapshot) => {
+          const fetchedData = snapshot.val() as ITrashDutyData | null;
+          if (fetchedData) {
+            setData(fetchedData);
+          }
+          setLoading(false);
+        });
+
+      } catch (error) {
+        console.error("Initialization error:", error);
+        Alert.alert("Error", "Failed to initialize app");
+        setLoading(false);
+      }
+    };
+
+    initializeApp();
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [createNewWeekData]);
+
 
   const isToday = (dateString: string | null): boolean => {
     if (!dateString) return false;

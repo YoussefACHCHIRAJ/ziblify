@@ -53,6 +53,8 @@ export default function List() {
       setToday(today);
     }
 
+    getTodayDate();
+
 
     return () => unsubscribe();
   }, []);
