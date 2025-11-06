@@ -29,6 +29,7 @@ import {
   Modal,
   TextInput,
 } from "react-native";
+import * as Notifications from "expo-notifications";
 
 const app = initializeApp(FirebaseConfig);
 const database = getDatabase(app);
@@ -47,6 +48,15 @@ const getCurrentServerTime = async (): Promise<Date> => {
     return new Date();
   }
 };
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 export default function App() {
   const [today, setToday] = useState<Date>(new Date());
@@ -201,7 +211,7 @@ export default function App() {
           needsUpdate = true;
           newData = createNewWeekData(
             currentData.monthlyStats,
-            currentData.rotationOffset,
+            currentData.rotationOffset
           );
         } else if (isNewMonth(currentData.lastUpdated)) {
           console.log("New month detected, resetting monthly stats");
@@ -212,7 +222,7 @@ export default function App() {
           }, {} as IMonthlyStats);
           newData = createNewWeekData(
             resetMonthlyStats,
-            currentData.rotationOffset,
+            currentData.rotationOffset
           );
         }
 
@@ -221,11 +231,11 @@ export default function App() {
             if (!txnData) {
               return newData;
             }
-            
+
             if (isNewWeek(txnData.weekStartDate, serverTime)) {
               return newData;
             }
-            
+
             return txnData;
           });
         }
@@ -237,7 +247,6 @@ export default function App() {
           }
           setLoading(false);
         });
-
       } catch (error) {
         console.error("Initialization error:", error);
         Alert.alert("Error", "Failed to initialize app");
@@ -253,7 +262,6 @@ export default function App() {
       }
     };
   }, [createNewWeekData]);
-
 
   const isToday = (dateString: string | null): boolean => {
     if (!dateString) return false;
@@ -320,6 +328,13 @@ export default function App() {
       await set(ref(database, "trashDuty"), updatedData);
 
       Alert.alert("✅ Well Done!", `Thanks ${todayEntry.person}!`);
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: `Trash has been taken by ${todayEntry.person}.`,
+          body: "Great work! tomorrow is a person turn.",
+        },
+        trigger: null,
+      });
     } catch (error) {
       Alert.alert("Error", "Failed to update. Check your internet connection.");
       console.error(error);
