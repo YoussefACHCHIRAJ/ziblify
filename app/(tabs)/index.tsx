@@ -30,9 +30,12 @@ import {
   TextInput,
 } from "react-native";
 import * as Notifications from "expo-notifications";
+import { sendNotification } from "@/lib/send-notifications";
+import useNotification from "@/hooks/useNotification";
 
 const app = initializeApp(FirebaseConfig);
 const database = getDatabase(app);
+
 const getCurrentServerTime = async (): Promise<Date> => {
   try {
     // Write server timestamp to a temporary location
@@ -64,10 +67,8 @@ export default function App() {
   const [loading, setLoading] = useState<boolean>(true);
   const [showPasswordModal, setShowPasswordModal] = useState<boolean>(false);
   const [passwordInput, setPasswordInput] = useState<string>("");
-
-  // Prevent multiple initializations
-  const isInitializing = useRef(false);
-  const lastCheckedDate = useRef<string | null>(null);
+  const pushToken = useNotification({ database });
+  // const pushToken = null;
 
   const createNewWeekData = useCallback(
     (
@@ -113,75 +114,6 @@ export default function App() {
       };
     },
     []
-  );
-
-  const initializeData = useCallback(
-    async (fetchedData: ITrashDutyData | null) => {
-      // Prevent multiple simultaneous initializations
-      if (isInitializing.current) {
-        return;
-      }
-
-      const serverTime = await getCurrentServerTime();
-      const today = serverTime.toDateString();
-      setToday(serverTime);
-
-      // If we already checked today, don't check again
-      if (lastCheckedDate.current === today && fetchedData) {
-        setData(fetchedData);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        isInitializing.current = true;
-        lastCheckedDate.current = today;
-
-        let newData: ITrashDutyData;
-
-        if (!fetchedData) {
-          // No data exists, create new week
-          console.log("Data not exist, create new one");
-          newData = createNewWeekData();
-        } else if (isNewWeek(fetchedData.weekStartDate, serverTime)) {
-          // New week detected
-          console.log("New Week, start new data");
-          newData = createNewWeekData(
-            fetchedData.monthlyStats,
-            fetchedData.rotationOffset
-          );
-        } else if (isNewMonth(fetchedData.lastUpdated)) {
-          console.log("New Month, start new Data");
-          // New month detected, reset stats
-          const resetMonthlyStats = HOUSEMATES.reduce((acc, person) => {
-            acc[person] = { done: 0, missed: 0 };
-            return acc;
-          }, {} as IMonthlyStats);
-          newData = createNewWeekData(
-            resetMonthlyStats,
-            fetchedData.rotationOffset
-          );
-        } else {
-          console.log("Keep the same data");
-          // Data is current, just use it
-          setData(fetchedData);
-          setLoading(false);
-          return;
-        }
-
-        // Write to Firebase
-        await set(ref(database, "trashDuty"), newData);
-        setData(newData);
-        setLoading(false);
-      } catch (error) {
-        Alert.alert("Error", "Failed to initialize data");
-        console.error(error);
-        setLoading(false);
-      } finally {
-        isInitializing.current = false;
-      }
-    },
-    [createNewWeekData]
   );
 
   useEffect(() => {
@@ -327,14 +259,16 @@ export default function App() {
 
       await set(ref(database, "trashDuty"), updatedData);
 
+      if (pushToken) {
+        sendNotification({
+          action: "done",
+          person: todayEntry.person,
+          excludeToken: pushToken,
+          timestamp: today.toISOString(),
+        }).then(() => console.log("Push Notification sent."));
+      }
+
       Alert.alert("✅ Well Done!", `Thanks ${todayEntry.person}!`);
-      Notifications.scheduleNotificationAsync({
-        content: {
-          title: `Trash has been taken by ${todayEntry.person}.`,
-          body: "Great work! tomorrow is a person turn.",
-        },
-        trigger: null,
-      });
     } catch (error) {
       Alert.alert("Error", "Failed to update. Check your internet connection.");
       console.error(error);
@@ -394,6 +328,15 @@ export default function App() {
                 "📝 Marked as Missed",
                 `${todayEntry.person} missed their turn.`
               );
+
+              if (pushToken) {
+                sendNotification({
+                  action: "missed",
+                  person: todayEntry.person,
+                  excludeToken: pushToken,
+                  timestamp: today.toISOString(),
+                }).then(() => console.log("Push Notification sent."));
+              }
             } catch (error) {
               Alert.alert(
                 "Error",

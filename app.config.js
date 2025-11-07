@@ -23,6 +23,7 @@ export default {
     },
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
+    googleServicesFile: IS_DEV ? "./google-services.json" : "./google-services.json",
     package: IS_DEV ? "com.ziblify.dev" : "com.achchiraj.ziblify",
   },
   web: {
@@ -56,6 +57,7 @@ export default {
     MESSAGING_SENDER_ID: process.env.MESSAGING_SENDER_ID,
     APP_ID: process.env.APP_ID,
     DATABASE_URL: process.env.DATABASE_URL,
+    SERVER_BASE_URL: process.env.SERVER_BASE_URL,
     router: {},
     eas: {
       projectId: "651e6bbe-b639-47f5-8e6f-6fe412c73b8d",

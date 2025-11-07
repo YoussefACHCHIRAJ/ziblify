@@ -44,9 +44,4 @@ app-example
 /ios
 /android
 
-# Service Accounts Credentials
-ziblify-dev-firebase-adminsdk-fbsvc-f883d892fa.json
-google-services*.json
-
-
 /firebase
