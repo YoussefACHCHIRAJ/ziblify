@@ -23,7 +23,7 @@ export default {
     },
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
-    googleServicesFile: IS_DEV ? "./google-services.json" : "./google-services.json",
+    googleServicesFile: IS_DEV ? "./google-services-dev.json" : "./google-services.json",
     package: IS_DEV ? "com.ziblify.dev" : "com.achchiraj.ziblify",
   },
   web: {
