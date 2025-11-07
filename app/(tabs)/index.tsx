@@ -36,7 +36,6 @@ import {
   useDeadlineCounter,
   getUrgencyLevel,
 } from "@/hooks/use-deadline-counter";
-import { useAutoMarkMissed } from "@/hooks/use-auto-mark-missed";
 
 const app = initializeApp(FirebaseConfig);
 const database = getDatabase(app);
@@ -73,8 +72,6 @@ export default function App() {
   const [showPasswordModal, setShowPasswordModal] = useState<boolean>(false);
   const [passwordInput, setPasswordInput] = useState<string>("");
   const pushToken = useNotification({ database });
-
-  useAutoMarkMissed(database, data, today, pushToken);
 
   const timeRemaining = useDeadlineCounter();
   const urgency = getUrgencyLevel(timeRemaining);

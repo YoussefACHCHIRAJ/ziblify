@@ -31,7 +31,7 @@ export const useDeadlineCounter = (): TimeRemaining => {
       
       // Create deadline for today at 23:00
       const deadline = new Date();
-      deadline.setHours(22, 0, 0, 0);
+      deadline.setHours(23, 0, 0, 0);
       
       // If current time is past 23:00, set deadline to tomorrow
       if (now >= deadline) {
