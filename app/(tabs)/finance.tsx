@@ -172,6 +172,18 @@ const Finance = () => {
           "✅ Fully Paid",
           "All payments confirmed! Expense removed."
         );
+        if (pushToken) {
+          sendNotification({
+            action: "custom",
+            person: display[memberId],
+            excludeToken: pushToken,
+            timestamp: new Date().toISOString(),
+            notification: {
+              title: "Payment Completed - Expense removed",
+              body: `${display[memberId]} just paid their share for the expense. Expense removed`,
+            },
+          }).then(() => console.log("Push Notification sent."));
+        }
       } else {
         // Update the confirmed list
         const expenseRef = ref(database, `expenses/${expenseId}`);

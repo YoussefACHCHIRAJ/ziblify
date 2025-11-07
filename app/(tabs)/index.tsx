@@ -17,7 +17,7 @@ import {
   serverTimestamp,
   runTransaction,
 } from "firebase/database";
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -32,6 +32,11 @@ import {
 import * as Notifications from "expo-notifications";
 import { sendNotification } from "@/lib/send-notifications";
 import useNotification from "@/hooks/useNotification";
+import {
+  useDeadlineCounter,
+  getUrgencyLevel,
+} from "@/hooks/use-deadline-counter";
+import { useAutoMarkMissed } from "@/hooks/use-auto-mark-missed";
 
 const app = initializeApp(FirebaseConfig);
 const database = getDatabase(app);
@@ -68,7 +73,22 @@ export default function App() {
   const [showPasswordModal, setShowPasswordModal] = useState<boolean>(false);
   const [passwordInput, setPasswordInput] = useState<string>("");
   const pushToken = useNotification({ database });
-  // const pushToken = null;
+
+  useAutoMarkMissed(database, data, today, pushToken);
+
+  const timeRemaining = useDeadlineCounter();
+  const urgency = getUrgencyLevel(timeRemaining);
+
+  const getUrgencyColor = () => {
+    switch (urgency) {
+      case "critical":
+        return "#FF5722";
+      case "warning":
+        return "#FF9800";
+      default:
+        return "#4CAF50";
+    }
+  };
 
   const createNewWeekData = useCallback(
     (
@@ -459,11 +479,22 @@ export default function App() {
           <Text style={styles.name}>{todayEntry?.person || "N/A"}</Text>
 
           {buttonsDisabled && todayEntry?.status !== "pending" && (
-            <View style={styles.disabledBadge}>
+            <View style={[styles.disabledBadge, todayEntry?.status === "done" ? styles.doneBadge : styles.missedBadge]}>
               <Text style={styles.disabledText}>
                 ✓ {todayEntry?.status === "done" ? "Done" : "Missed"} for today
               </Text>
+
               <Text style={styles.disabledSubtext}>Come back tomorrow</Text>
+            </View>
+          )}
+          {todayEntry?.status === "pending" && (
+            <View style={styles.deadlineContainer}>
+              <Text style={styles.deadlineText}>
+                Take out the trash before 23:00
+              </Text>
+              <Text style={[styles.deadlineText, { color: getUrgencyColor() }]}>
+                Countdown: {timeRemaining.formattedTime} remaining
+              </Text>
             </View>
           )}
         </View>
@@ -636,17 +667,22 @@ const styles = StyleSheet.create({
     marginTop: 15,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: "#E8F5E9",
     borderRadius: 8,
     alignItems: "center",
   },
+  doneBadge: {
+    backgroundColor: "#E8F5E9",
+  },
+  missedBadge: {
+    backgroundColor: "#FF5722",
+  },
   disabledText: {
-    color: "#4CAF50",
+    color: "#000",
     fontSize: 14,
     fontWeight: "bold",
   },
   disabledSubtext: {
-    color: "#81C784",
+    color: "#000",
     fontSize: 12,
     marginTop: 2,
   },
@@ -685,6 +721,13 @@ const styles = StyleSheet.create({
   },
   buttonTextDisabled: {
     color: "#E0E0E0",
+  },
+  deadlineContainer: {
+    marginTop: 10,
+  },
+  deadlineText: {
+    fontSize: 16,
+    marginBottom: 8,
   },
   undoButton: {
     backgroundColor: "#FF9800",

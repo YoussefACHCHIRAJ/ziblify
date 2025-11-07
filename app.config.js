@@ -5,7 +5,7 @@ const IS_DEV = process.env.APP_VARIANT === 'development';
 export default {
   name: IS_DEV ? "ziblify (Dev)" : "ziblify",
   slug: "ziblify",
-  version: "1.1.0",
+  version: "1.0.0",
   orientation: "portrait",
   icon: "./assets/images/logo.png",
   scheme: "ziblify",
