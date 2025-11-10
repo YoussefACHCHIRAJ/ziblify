@@ -87,108 +87,70 @@ export default function App() {
     }
   };
 
-  const createNewWeekData = useCallback(
-    (
-      existingMonthlyStats?: IMonthlyStats,
-      previousRotationOffset?: number
-    ): ITrashDutyData => {
-      const monday = getMondayOfWeek(today);
-      const weekNumber = getWeekNumber(today);
-      const startingIndex =
-        previousRotationOffset !== undefined
-          ? (previousRotationOffset + 1) % HOUSEMATES.length
-          : 0;
-      // Create 7 days schedule (Monday to Sunday)
-      const weekSchedule: IWeeklyEntry[] = [];
-      for (let i = 0; i < 7; i++) {
-        const date = new Date(monday);
-        date.setDate(monday.getDate() + i);
+  const initializeEmptyDatabase = useCallback(async (): Promise<ITrashDutyData> => {
+    console.log("Database is empty, creating initial data...");
+    
+    // const today = await getCurrentServerTime();
+    const monday = getMondayOfWeek(today);
+    const weekNumber = getWeekNumber(today);
 
-        weekSchedule.push({
-          dayOfWeek: (i + 1) % 7, // Monday=1, Sunday=0
-          date: date.toISOString(),
-          person: HOUSEMATES[(startingIndex + i) % HOUSEMATES.length],
-          status: "pending",
-        });
-      }
+    const weekSchedule: IWeeklyEntry[] = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + i);
 
-      const monthlyStats =
-        existingMonthlyStats ||
-        HOUSEMATES.reduce((acc, person) => {
-          acc[person] = { done: 0, missed: 0 };
-          return acc;
-        }, {} as IMonthlyStats);
+      weekSchedule.push({
+        dayOfWeek: (i + 1) % 7,
+        date: date.toISOString(),
+        person: HOUSEMATES[i % HOUSEMATES.length],
+        status: "pending",
+      });
+    }
 
-      return {
-        weekStartDate: monday.toISOString(),
-        weekNumber,
-        currentDayIndex: today.getDay(),
-        weekSchedule,
-        monthlyStats,
-        lastActionDate: null,
-        lastUpdated: today.toISOString(),
-        rotationOffset: (startingIndex + 6) % HOUSEMATES.length,
-      };
-    },
-    []
-  );
+    const monthlyStats = HOUSEMATES.reduce((acc, person) => {
+      acc[person] = { done: 0, missed: 0 };
+      return acc;
+    }, {} as IMonthlyStats);
+
+    const initialData: ITrashDutyData = {
+      weekStartDate: monday.toISOString(),
+      weekNumber,
+      currentDayIndex: today.getDay(),
+      weekSchedule,
+      monthlyStats,
+      lastActionDate: null,
+      lastUpdated: today.toISOString(),
+      rotationOffset: 6,
+    };
+
+    await set(ref(database, "trashDuty"), initialData);
+    return initialData;
+  }, []);
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
 
     const initializeApp = async () => {
       try {
+
         await set(ref(database, "currentDate"), serverTimestamp());
+
 
         const serverTime = await getCurrentServerTime();
         setToday(serverTime);
 
         const trashDutyRef = ref(database, "trashDuty");
 
+        // Check if database has data
         const snapshot = await get(trashDutyRef);
         const currentData = snapshot.val() as ITrashDutyData | null;
 
-        let needsUpdate = false;
-        let newData: ITrashDutyData | null = null;
-
+        // Only initialize if completely empty
         if (!currentData) {
-          console.log("No data exists, creating initial data");
-          needsUpdate = true;
-          newData = createNewWeekData();
-        } else if (isNewWeek(currentData.weekStartDate, serverTime)) {
-          console.log("New week detected, resetting data");
-          needsUpdate = true;
-          newData = createNewWeekData(
-            currentData.monthlyStats,
-            currentData.rotationOffset
-          );
-        } else if (isNewMonth(currentData.lastUpdated)) {
-          console.log("New month detected, resetting monthly stats");
-          needsUpdate = true;
-          const resetMonthlyStats = HOUSEMATES.reduce((acc, person) => {
-            acc[person] = { done: 0, missed: 0 };
-            return acc;
-          }, {} as IMonthlyStats);
-          newData = createNewWeekData(
-            resetMonthlyStats,
-            currentData.rotationOffset
-          );
+          await initializeEmptyDatabase();
         }
 
-        if (needsUpdate && newData) {
-          await runTransaction(trashDutyRef, (txnData) => {
-            if (!txnData) {
-              return newData;
-            }
-
-            if (isNewWeek(txnData.weekStartDate, serverTime)) {
-              return newData;
-            }
-
-            return txnData;
-          });
-        }
-
+        // Start listening for real-time updates
         unsubscribe = onValue(trashDutyRef, (snapshot) => {
           const fetchedData = snapshot.val() as ITrashDutyData | null;
           if (fetchedData) {
@@ -210,7 +172,7 @@ export default function App() {
         unsubscribe();
       }
     };
-  }, [createNewWeekData]);
+  }, [initializeEmptyDatabase]);
 
   const isToday = (dateString: string | null): boolean => {
     if (!dateString) return false;
